@@ -22,14 +22,14 @@ class Generator(object) :
         # The bigram log-probabilities.
         self.bigram_prob = defaultdict(dict)
 
+        # The trigram log-probabilities.
+        self.trigram_prob = defaultdict(dict)
+
         # Number of unique words (word forms) in the training corpus.
         self.unique_words = 0
 
         # The total number of words in the training corpus.
         self.total_words = 0
-
-        # The average log-probability (= the estimation of the entropy) of the test corpus.
-        self.logProb = 0
 
         # The identifier of the previous word processed in the test corpus. Is -1 if the last word was unknown.
         self.last_index = -1
@@ -45,7 +45,6 @@ class Generator(object) :
 
         # The number of words processed in the test corpus.
         self.test_words_processed = 0
-
 
     def read_model(self, filename):
         """
@@ -75,18 +74,32 @@ class Generator(object) :
                 for line in f:
                     # Split each line into parts based on space delimiter
                     parts = line.strip().split(' ')
-                    # Check if it's the end of file marker
-                    if parts[0] == '-1':
-                        # End of file, break the loop
+                    # Check if it's the end of bigrams marker
+                    if parts[0] == '-2':
+                        # End of bigrams, break the loop
                         break
                     # Extract index1, index2, and log probability from parts
                     index1, index2, logprob = int(parts[0]), int(parts[1]), float(parts[2])
                     # Compute and store the actual probability (exponentiate the log probability)
                     self.bigram_prob[index1][index2] = math.exp(logprob)
+
+                # Loop through each line representing trigram probabilities
+                for line in f:
+                    # Split each line into parts based on space delimiter
+                    parts = line.strip().split(' ')
+                    # Check if it's the end of file marker
+                    if parts[0] == '-1':
+                        # End of file, break the loop
+                        break
+                    # Extract index1, index2, index3, and log probability from parts
+                    index1, index2, index3, logprob = int(parts[0]), int(parts[1]), int(parts[2]), float(parts[3])
+                    # Compute and store the actual probability (exponentiate the log probability)
+                    self.trigram_prob[index1][index2][index3] = math.exp(logprob)
+
                 return True  # Successfully processed the entire file
         except IOError:
             # Handle file not found error
-            print("Couldn't find bigram probabilities file {}".format(filename))
+            print("Couldn't find language model file {}".format(filename))
             return False  # Failed to process the file
 
     def generate(self, w, n):
@@ -101,22 +114,33 @@ class Generator(object) :
 
         current_index = self.index[w]
         for i in range(n):
-            if current_index not in self.bigram_prob or not self.bigram_prob[current_index]:
-                # If the current word has no matching words in bigram or it is not in the model,
+            if (current_index not in self.bigram_prob or
+                    not self.bigram_prob[current_index] or
+                    current_index not in self.trigram_prob or
+                    not self.trigram_prob[current_index]):
+                # If the current word has no matching words in bigram or trigram or it is not in the model,
                 # pick a random word from the vocabulary
                 current_index = random.choice(list(self.index.values()))
             else:
-                # Create a list of possible next words weighted by their bigram probabilities
-                next_words = list(self.bigram_prob[current_index].keys())
-                probabilities = []
-                for nw in next_words:
-                    probabilities.append(math.exp(self.bigram_prob[current_index][nw]))
+                # Check if there are trigram probabilities for the current index
+                if current_index in self.trigram_prob:
+                    # Create a list of possible next words weighted by their trigram probabilities
+                    next_words = list(self.trigram_prob[current_index].keys())
+                    probabilities = []
+                    for nw in next_words:
+                        probabilities.append(math.exp(self.trigram_prob[current_index][nw]))
+                else:
+                    # Create a list of possible next words weighted by their bigram probabilities
+                    next_words = list(self.bigram_prob[current_index].keys())
+                    probabilities = []
+                    for nw in next_words:
+                        probabilities.append(math.exp(self.bigram_prob[current_index][nw]))
 
                 # To account for exception in question
                 if all(prob == 0 for prob in probabilities):
                     current_index = random.choice(list(self.index.values()))
-                
-                # Choose a new word based on the bigram probabilities
+
+                # Choose a new word based on the trigram or bigram probabilities
                 else:
                     current_index = random.choices(next_words, weights=probabilities, k=1)[0]
     
@@ -126,7 +150,7 @@ def main():
     """
     Parse command line arguments
     """
-    parser = argparse.ArgumentParser(description='BigramTester')
+    parser = argparse.ArgumentParser(description='Generator')
     parser.add_argument('--file', '-f', type=str,  required=True, help='file with language model')
     parser.add_argument('--start', '-s', type=str, required=True, help='starting word')
     parser.add_argument('--number_of_words', '-n', type=int, default=100)
