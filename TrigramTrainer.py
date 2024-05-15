@@ -108,8 +108,8 @@ class TrigramTrainer(object):
 
         # Arrays holding the unigram, bigram and trigram counts.
         self.unigram_count = defaultdict(int)
-        self.bigram_count = defaultdict(lambda: defaultdict(int))
-        self.trigram_count = defaultdict(lambda: defaultdict(int))
+        self.bigram_count = defaultdict(int)
+        self.trigram_count = defaultdict(int)
 
         # The identifier of the previous word processed.
         self.last_index_1 = -1
