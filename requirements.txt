@@ -1,0 +1,7 @@
+numpy
+torch
+tensorflow
+nltk
+re
+codecs
+argparse

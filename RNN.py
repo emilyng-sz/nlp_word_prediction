@@ -22,9 +22,10 @@ def process_files(f):
     cleaned_sentences = []
     sentences = nltk.sent_tokenize(text)
     for sentence in sentences:
-        sentence = sentence.lower()
-        sentence = sentence.replace('\r\n', ' ')
-        sentence = re.sub(punctuation_pattern, '', sentence)
+        sentence = sentence.lower() # make lower case
+        sentence = sentence.replace('\r\n', ' ') # remove next line character
+        sentence = re.sub(punctuation_pattern, '', sentence) # remove punctuations
+        sentence = re.sub(r'\d+', '', sentence) # remove numbers
         cleaned_sentences.append(sentence)
         for word in sentence.split():
             if word not in word_to_index:
