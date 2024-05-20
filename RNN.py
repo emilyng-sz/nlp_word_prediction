@@ -6,7 +6,8 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 import argparse
-
+import random
+import time
 
 def process_files(f):
     """
@@ -22,10 +23,12 @@ def process_files(f):
     cleaned_sentences = []
     sentences = nltk.sent_tokenize(text)
     for sentence in sentences:
-        sentence = sentence.lower() # make lower case
-        sentence = sentence.replace('\r\n', ' ') # remove next line character
-        sentence = re.sub(punctuation_pattern, '', sentence) # remove punctuations
-        sentence = re.sub(r'\d+', '', sentence) # remove numbers
+        sentence = sentence.lower()
+        sentence = sentence.replace('\r\n', ' ')
+        sentence = sentence.replace('\n', ' ')
+        sentence = sentence.replace('\r', ' ')
+        sentence = re.sub(r'\d+', '', sentence)
+        sentence = re.sub(punctuation_pattern, '', sentence)
         cleaned_sentences.append(sentence)
         for word in sentence.split():
             if word not in word_to_index:
@@ -53,14 +56,24 @@ def train_model(text_data, embedding_dim, hidden_dim, epochs):
     for line in text_data:
         token_list = line.split()
         sequence = [word_to_index[word] for word in token_list]
-        for i in range(1, len(sequence)):
+        max_sentence_length = min(80, len(sequence)) # truncate sentence if it is too long
+        for i in range(1, max_sentence_length):
             n_gram_sequence = sequence[:i+1]
             input_sequences.append(n_gram_sequence)
 
     # Pad sequences with 0s in front of the words 
     max_sequence_len = max([len(x) for x in input_sequences])
-    input_sequences = np.array([[0] * (max_sequence_len - len(i)) + i for i in input_sequences])
+    print(f"max sequence length: {max_sequence_len}, total num sentences: {len(input_sequences)}")
 
+    # to create sample if too many input sentences, OR to reshuffle
+    input_sequences = random.sample(input_sequences, min(len(input_sequences), 30000))
+
+    max_sequence_len = max([len(x) for x in input_sequences])
+    
+    input_sequences = np.array([[0] * (max_sequence_len - len(i)) + i for i in input_sequences])
+    
+    print(f"updated max sequence length: {max_sequence_len}, updated total num sentences: {len(input_sequences)}")
+    
     # Convert to PyTorch tensors
     # X_train is the input sequence, y_train is the following word. e.g. "the" -> "quick", "the quick" -> "brown" etc
     X_train = torch.tensor(input_sequences[:, :-1], dtype=torch.long)
@@ -75,9 +88,10 @@ def train_model(text_data, embedding_dim, hidden_dim, epochs):
     # Define loss and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-
+    time_start = time.time()
     # Training the model
     for epoch in range(epochs):
+        time_now = time.time()
         model.train()
         optimizer.zero_grad()
         output = model(X_train) 
@@ -87,9 +101,11 @@ def train_model(text_data, embedding_dim, hidden_dim, epochs):
 
         if (epoch+1) % 10 == 0:
             print(f'Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}')
+            print(f'time taken for these epochs: {(time.time() - time_now)/60} mins')
 
+    print(f'Total taken for training: {(time.time() - time_start)/60} mins')
     return model
-
+###
 def save_model(model, path):
     torch.save(model.state_dict(), path)
 
