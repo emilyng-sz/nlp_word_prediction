@@ -144,7 +144,7 @@ def save_model(model, path):
     torch.save(model.state_dict(), path)
 
 def load_model(path, vocab_size, embedding_dim, hidden_dim):
-    
+
     model = RNNModel(vocab_size, embedding_dim, hidden_dim)
     model.load_state_dict(torch.load(path))
 
@@ -198,7 +198,7 @@ if __name__ == "__main__":
 
         print(f"Model trained and saved at {args.model_path}")
 
-    elif args.model_path: #and args.w2i_path and args.i2w_path:
+    elif args.model_path and args.data:
         # Load the model and re-run word mappings
         word_to_index, index_to_word, text_data = process_files(args.data_path)
         vocab_size = len(word_to_index)
