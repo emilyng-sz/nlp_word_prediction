@@ -8,6 +8,7 @@ from torch.nn.utils.rnn import pad_sequence
 import argparse
 import random
 import time
+import json
 
 def process_files(f):
     """
@@ -89,9 +90,9 @@ def train_model(text_data, embedding_dim, hidden_dim, epochs):
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     time_start = time.time()
+    start_of_new_epoch = time_start
     # Training the model
     for epoch in range(epochs):
-        time_now = time.time()
         model.train()
         optimizer.zero_grad()
         output = model(X_train) 
@@ -101,17 +102,30 @@ def train_model(text_data, embedding_dim, hidden_dim, epochs):
 
         if (epoch+1) % 10 == 0:
             print(f'Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}')
-            print(f'time taken for these epochs: {(time.time() - time_now)/60} mins')
+            print(f'time taken for these epochs: {(time.time() - start_of_new_epoch)/60} mins')
+            start_of_new_epoch = time.time()
 
     print(f'Total taken for training: {(time.time() - time_start)/60} mins')
     return model
+
 ###
+def save_index(index, path):
+    # Save list to a JSON file
+    with open(path, 'w') as json_file:
+        json.dump(index, json_file)
+
+def load_index(path):
+    with open(path, 'w') as json_file:
+        index = json.load(index, json_file)
+    return index
+
 def save_model(model, path):
     torch.save(model.state_dict(), path)
 
 def load_model(path, vocab_size, embedding_dim, hidden_dim):
     model = RNNModel(vocab_size, embedding_dim, hidden_dim)
     model.load_state_dict(torch.load(path))
+
     # Set the model to evaluation mode
     model.eval()
     return model
@@ -143,7 +157,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train or use an RNN for word prediction.")
     parser.add_argument('--train', '-t', action='store_true', help="Train a new model.")
     parser.add_argument('--model_path', '-m', type=str, help="path to save or load the model.")
-    parser.add_argument('--data_path', '-d', type=str, help="Text data for training.")
+    parser.add_argument('--data_path', '-d', type=str, help="data path")
     parser.add_argument('--epochs', type=int, default=100, help="Number of epochs for training.")
     parser.add_argument('--embedding_dim', type=int, default=100, help="Dimension of word embeddings.")
     parser.add_argument('--hidden_dim', type=int, default=150, help="Dimension of RNN hidden states.")
@@ -162,15 +176,11 @@ if __name__ == "__main__":
 
         print(f"Model trained and saved at {args.model_path}")
 
-    elif args.model_path and args.data_path:
-        # Load the model
-        word_to_index, index_to_word, _ = process_files(args.data_path)  
+    elif args.model_path: #and args.w2i_path and args.i2w_path:
+        # Load the model and re-run word mappings
+        word_to_index, index_to_word, text_data = process_files(args.data_path)
         vocab_size = len(word_to_index)
-        model = RNNModel(vocab_size, args.embedding_dim, args.hidden_dim)
-
-        model.load_state_dict(torch.load(args.model_path))
-        model.eval()
-        
+        model = load_model(args.model_path, vocab_size, args.embedding_dim, args.hidden_dim)
         print("Loaded model. Enter seed text to predict next words.")
         while True:
             seed_text = input("Enter seed text: ").strip().lower()
