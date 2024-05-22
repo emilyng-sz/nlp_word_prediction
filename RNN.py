@@ -12,29 +12,46 @@ import json
 
 def process_files(f):
     """
-    Processes the file f and returns word_to_index:dict, index_to_word:dict, and cleaned_sentences:list of strings.
+    Processes the file and returns word_to_index, index_to_word, and cleaned_sentences.
+    
+    Parameters:
+    f (str): The file path of the input file.
+    
+    Returns:
+    word_to_index (dict): A dictionary mapping words to their corresponding indices.
+    index_to_word (dict): A dictionary mapping indices to their corresponding words.
+    cleaned_sentences (list): A list of cleaned sentences in strings
+    
     """
     print("Processing file...")
     word_to_index = {'<PAD>':0}
     index_to_word = {0:'<PAD>'}
     punctuation_pattern = re.compile(r'[^\w\s]')
     with codecs.open(f, 'r', 'utf-8') as text_file:
-        text = text_file.read().encode('utf-8').decode() #Maintain capitalization
+        text = text_file.read().encode('utf-8').decode() # Maintain capitalization
     
     cleaned_sentences = []
     sentences = nltk.sent_tokenize(text)
     for sentence in sentences:
-        sentence = sentence.lower()
-        sentence = sentence.replace('\r\n', ' ')
+        # transforms all to lower case
+        sentence = sentence.lower() 
+        # remove new line characters
+        sentence = sentence.replace('\r\n', ' ') 
         sentence = sentence.replace('\n', ' ')
         sentence = sentence.replace('\r', ' ')
+        # remove numbers
         sentence = re.sub(r'\d+', '', sentence)
+        # remove punctuation
         sentence = re.sub(punctuation_pattern, '', sentence)
+
         cleaned_sentences.append(sentence)
+
+        # create mappings
         for word in sentence.split():
             if word not in word_to_index:
                 word_to_index[word] = len(word_to_index)
                 index_to_word[len(word_to_index)] = word
+
     return word_to_index, index_to_word, cleaned_sentences
 
 ## Define RNN Model
@@ -47,8 +64,9 @@ class RNNModel(nn.Module):
         
     def forward(self, x):
         embedded = self.embedding(x)
-        output, hidden = self.rnn(embedded)
-        output = self.fc(output[:, -1, :]) # [batch_size, seq_len, vocab_size] but we index what we want
+        output, hidden = self.rnn(embedded) # do not make use of hidden layers
+        # we extract the output of the last time step for each element in the batch. 
+        output = self.fc(output[:, -1, :]) # [batch_size, seq_len, vocab_size] 
         return output
     
 def train_model(text_data, embedding_dim, hidden_dim, epochs):
@@ -77,8 +95,8 @@ def train_model(text_data, embedding_dim, hidden_dim, epochs):
     
     # Convert to PyTorch tensors
     # X_train is the input sequence, y_train is the following word. e.g. "the" -> "quick", "the quick" -> "brown" etc
-    X_train = torch.tensor(input_sequences[:, :-1], dtype=torch.long)
-    y_train = torch.tensor(input_sequences[:,-1], dtype=torch.long)
+    X_train = torch.tensor(input_sequences[:, :-1], dtype=torch.long) # takes up to the second last word in sequence for training data
+    y_train = torch.tensor(input_sequences[:,-1], dtype=torch.long) # takes the last word in the sequence as output (prediction)
 
     # Define model parameters, most are from function input
     vocab_size = len(word_to_index)
@@ -89,8 +107,10 @@ def train_model(text_data, embedding_dim, hidden_dim, epochs):
     # Define loss and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+
     time_start = time.time()
     start_of_new_epoch = time_start
+
     # Training the model
     for epoch in range(epochs):
         model.train()
@@ -108,9 +128,10 @@ def train_model(text_data, embedding_dim, hidden_dim, epochs):
     print(f'Total taken for training: {(time.time() - time_start)/60} mins')
     return model
 
-###
+### helper functions
+
 def save_index(index, path):
-    # Save list to a JSON file
+    # Save index to a JSON file
     with open(path, 'w') as json_file:
         json.dump(index, json_file)
 
@@ -123,6 +144,7 @@ def save_model(model, path):
     torch.save(model.state_dict(), path)
 
 def load_model(path, vocab_size, embedding_dim, hidden_dim):
+    
     model = RNNModel(vocab_size, embedding_dim, hidden_dim)
     model.load_state_dict(torch.load(path))
 
