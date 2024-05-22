@@ -187,7 +187,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if args.train and args.data:
+    if args.train and args.data_path:
         # Load and preprocess the text data
         word_to_index, index_to_word, text_data = process_files(args.data_path)
         
@@ -198,7 +198,7 @@ if __name__ == "__main__":
 
         print(f"Model trained and saved at {args.model_path}")
 
-    elif args.model_path and args.data:
+    elif args.model_path and args.data_path:
         # Load the model and re-run word mappings
         word_to_index, index_to_word, text_data = process_files(args.data_path)
         vocab_size = len(word_to_index)
