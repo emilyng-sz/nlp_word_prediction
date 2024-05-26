@@ -137,16 +137,17 @@ if __name__ == "__main__":
         # Load the model and re-run word mappings
         #word_to_index, index_to_word, text_data = process_files(args.data_path)
         words, char_to_index, index_to_char, word_to_index, index_to_word = process_files(args.data_path)
-        print(char_to_index, word_to_index)
         vocab_size = len(word_to_index)
         model = load_model(args.model_path, vocab_size, args.embedding_dim, args.hidden_dim)
         print("Loaded model. Enter characters to predict next words.")
 
         while True:
             seed_text = input("Enter seed text: ").strip().lower()
-            words = suggest_words_RNN(seed_text, model, char_to_index, index_to_word)
-            print("Suggested words:", words)
             if seed_text == "quit":
                 break
+            words = suggest_words_RNN(seed_text, model, char_to_index, index_to_word)
+            print(f"\n1 - {words[0]}\n2 - {words[1]}\n3 - {words[2]}\n")
+            print("Enter 'quit' to exit.\n")
+            
     else:
         print("Please specify either -t (training option) with -d (data) and -m (model path) OR -m (pretrained model) with -d (data) for predictions.")
