@@ -10,48 +10,15 @@ import torch.optim as optim
 
 def process_files(f):
     """
-    Processes the file and returns word_to_index, index_to_word, and cleaned_sentences.
-    
     Parameters:
     f (str): The file path of the input file.
-    
-    Returns:
-    word_to_index (dict): A dictionary mapping words to their corresponding indices.
-    index_to_word (dict): A dictionary mapping indices to their corresponding words.
-    cleaned_sentences (list): A list of cleaned sentences in strings
-    
     """
     print("Processing file...")
-    #word_to_index = {'<PAD>':0}
-    #index_to_word = {0:'<PAD>'}
     with codecs.open(f, 'r', 'utf-8') as text_file:
         text = text_file.read().encode('utf-8').decode() # Maintain capitalization
     words = nltk.word_tokenize(text)
     punctuation_pattern = re.compile(r'[^\w\s]')
     words = [re.sub(punctuation_pattern, '', word.lower()) for word in words]
-    '''
-    punctuation_pattern = re.compile(r'[^\w\s]')
-    cleaned_sentences = []
-    for sentence in sentences:
-        # transforms all to lower case
-        sentence = sentence.lower() 
-        # remove new line characters
-        sentence = sentence.replace('\r\n', ' ') 
-        sentence = sentence.replace('\n', ' ')
-        sentence = sentence.replace('\r', ' ')
-        # remove numbers
-        sentence = re.sub(r'\d+', '', sentence)
-        # remove punctuation
-        sentence = re.sub(punctuation_pattern, '', sentence)
-
-        cleaned_sentences.append(sentence)
-
-        # create mappings
-        for word in sentence.split():
-            if word not in word_to_index:
-                word_to_index[word] = len(word_to_index)
-                index_to_word[len(word_to_index)] = word
-'''
     char_set = sorted(set(''.join(words)))
     char_to_index = {ch: i for i, ch in enumerate(char_set)}
     index_to_char = {i: ch for i, ch in enumerate(char_set)}
@@ -132,8 +99,10 @@ def load_model(path, vocab_size, embedding_dim, hidden_dim):
 
 def suggest_words_RNN(seed_text, model, char_to_index, index_to_word):
     model.eval()
+    #max_len = max(len(word) for word in word_to_index.keys()) 
     with torch.no_grad():
         sequence = torch.tensor([char_to_index[char] for char in seed_text], dtype=torch.long).unsqueeze(0)
+        #sequence = torch.nn.functional.pad(sequence, (max_len - len(sequence), 0), 'constant', 0)
         output = model(sequence)
         top_3_words = []
         _, predicted_index = torch.max(output, 1)
@@ -177,5 +146,7 @@ if __name__ == "__main__":
             seed_text = input("Enter seed text: ").strip().lower()
             words = suggest_words_RNN(seed_text, model, char_to_index, index_to_word)
             print("Suggested words:", words)
+            if seed_text == "quit":
+                break
     else:
         print("Please specify either -t (training option) with -d (data) and -m (model path) OR -m (pretrained model) with -d (data) for predictions.")
