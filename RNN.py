@@ -6,9 +6,7 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 import argparse
-import random
-import time
-import json
+import torch.optim as optim
 
 def process_files(f):
     """
@@ -24,14 +22,16 @@ def process_files(f):
     
     """
     print("Processing file...")
-    word_to_index = {'<PAD>':0}
-    index_to_word = {0:'<PAD>'}
-    punctuation_pattern = re.compile(r'[^\w\s]')
+    #word_to_index = {'<PAD>':0}
+    #index_to_word = {0:'<PAD>'}
     with codecs.open(f, 'r', 'utf-8') as text_file:
         text = text_file.read().encode('utf-8').decode() # Maintain capitalization
-    
+    words = nltk.word_tokenize(text)
+    punctuation_pattern = re.compile(r'[^\w\s]')
+    words = [re.sub(punctuation_pattern, '', word.lower()) for word in words]
+    '''
+    punctuation_pattern = re.compile(r'[^\w\s]')
     cleaned_sentences = []
-    sentences = nltk.sent_tokenize(text)
     for sentence in sentences:
         # transforms all to lower case
         sentence = sentence.lower() 
@@ -51,8 +51,26 @@ def process_files(f):
             if word not in word_to_index:
                 word_to_index[word] = len(word_to_index)
                 index_to_word[len(word_to_index)] = word
+'''
+    char_set = sorted(set(''.join(words)))
+    char_to_index = {ch: i for i, ch in enumerate(char_set)}
+    index_to_char = {i: ch for i, ch in enumerate(char_set)}
+    word_set = sorted(set(words))
+    word_to_index = {word: i for i, word in enumerate(word_set)}
+    index_to_word = {i: word for i, word in enumerate(word_set)}
+    return words, char_to_index, index_to_char, word_to_index, index_to_word
 
-    return word_to_index, index_to_word, cleaned_sentences
+def create_input_output_pairs(words, char_to_index, word_to_index):
+    input_sequences = []
+    output_vectors = []
+    for word in words:
+        for i in range(1, len(word)):
+            input_seq = word[:i]
+            output_word = word
+            input_seq = [char_to_index[ch] for ch in input_seq]
+            input_sequences.append(input_seq)
+            output_vectors.append(word_to_index[output_word])
+    return input_sequences, output_vectors
 
 ## Define RNN Model
 class RNNModel(nn.Module):
@@ -69,76 +87,36 @@ class RNNModel(nn.Module):
         output = self.fc(output[:, -1, :]) # [batch_size, seq_len, vocab_size] 
         return output
     
-def train_model(text_data, embedding_dim, hidden_dim, epochs):
-    # Convert text data to sequence data
-    input_sequences = []
-    for line in text_data:
-        token_list = line.split()
-        sequence = [word_to_index[word] for word in token_list]
-        max_sentence_length = min(80, len(sequence)) # truncate sentence if it is too long
-        for i in range(1, max_sentence_length):
-            n_gram_sequence = sequence[:i+1]
-            input_sequences.append(n_gram_sequence)
 
-    # Pad sequences with 0s in front of the words 
-    max_sequence_len = max([len(x) for x in input_sequences])
-    print(f"max sequence length: {max_sequence_len}, total num sentences: {len(input_sequences)}")
-
-    # to create sample if too many input sentences, OR to reshuffle
-    input_sequences = random.sample(input_sequences, min(len(input_sequences), 30000))
-
-    max_sequence_len = max([len(x) for x in input_sequences])
+def train_model(input_sequences, output_vectors, char_to_index, word_to_index, embedding_dim=50, hidden_dim=128, epochs=100, learning_rate=0.01):
+    vocab_size = len(word_to_index)  # output dimension is the number of unique words
     
-    input_sequences = np.array([[0] * (max_sequence_len - len(i)) + i for i in input_sequences])
-    
-    print(f"updated max sequence length: {max_sequence_len}, updated total num sentences: {len(input_sequences)}")
-    
-    # Convert to PyTorch tensors
-    # X_train is the input sequence, y_train is the following word. e.g. "the" -> "quick", "the quick" -> "brown" etc
-    X_train = torch.tensor(input_sequences[:, :-1], dtype=torch.long) # takes up to the second last word in sequence for training data
-    y_train = torch.tensor(input_sequences[:,-1], dtype=torch.long) # takes the last word in the sequence as output (prediction)
-
-    # Define model parameters, most are from function input
-    vocab_size = len(word_to_index)
-
-    # Instantiate the model
     model = RNNModel(vocab_size, embedding_dim, hidden_dim)
-
-    # Define loss and optimizer
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-
-    time_start = time.time()
-    start_of_new_epoch = time_start
-
-    # Training the model
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    
+    # Ensure all sequences are of the same length by padding
+    max_len = max(len(seq) for seq in input_sequences)
+    input_sequences = [torch.tensor(seq, dtype=torch.long) for seq in input_sequences]
+    input_sequences = nn.utils.rnn.pad_sequence(input_sequences, batch_first=True, padding_value=0)
+    
+    output_vectors = torch.tensor(output_vectors, dtype=torch.long)
+    print("Training starts for", input_sequences.shape, output_vectors.shape)
     for epoch in range(epochs):
         model.train()
         optimizer.zero_grad()
-        output = model(X_train) 
-        loss = criterion(output, y_train)
+        
+        outputs = model(input_sequences)
+        loss = criterion(outputs, output_vectors)
         loss.backward()
         optimizer.step()
-
-        if (epoch+1) % 10 == 0:
-            print(f'Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}')
-            print(f'time taken for these epochs: {(time.time() - start_of_new_epoch)/60} mins')
-            start_of_new_epoch = time.time()
-
-    print(f'Total taken for training: {(time.time() - time_start)/60} mins')
+        
+        if (epoch + 1) % 10 == 0:
+            print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.4f}')
+    
     return model
 
 ### helper functions
-
-def save_index(index, path):
-    # Save index to a JSON file
-    with open(path, 'w') as json_file:
-        json.dump(index, json_file)
-
-def load_index(path):
-    with open(path, 'w') as json_file:
-        index = json.load(index, json_file)
-    return index
 
 def save_model(model, path):
     torch.save(model.state_dict(), path)
@@ -152,28 +130,19 @@ def load_model(path, vocab_size, embedding_dim, hidden_dim):
     model.eval()
     return model
 
-# Function to predict the next word
-def predict_next_word(seed_text, model):
+def suggest_words_RNN(seed_text, model, char_to_index, index_to_word):
     model.eval()
     with torch.no_grad():
-        sequence = torch.tensor([word_to_index[word] for word in seed_text.split()], dtype=torch.long).unsqueeze(0)
+        sequence = torch.tensor([char_to_index[char] for char in seed_text], dtype=torch.long).unsqueeze(0)
         output = model(sequence)
+        top_3_words = []
         _, predicted_index = torch.max(output, 1)
-        predicted_word = index_to_word[predicted_index.item()]
-        return predicted_word
-
-# Function to predict x number of next words
-def predict_next_words(seed_text, model, word_to_index, index_to_word, num_words):
-    model.eval()
-    for _ in range(num_words):
-        with torch.no_grad():
-            sequence = torch.tensor([word_to_index[word] for word in seed_text.split()], dtype=torch.long).unsqueeze(0)
-            output = model(sequence)
-            _, predicted_index = torch.max(output, 1)
-            predicted_word = index_to_word[predicted_index.item()]
-            seed_text += ' ' + predicted_word
-
-    return seed_text
+        _, second_index = torch.topk(output, k=2, dim=1)
+        _, third_index = torch.topk(output, k=3, dim=1)
+        top_3_words.append(index_to_word[predicted_index.item()])
+        top_3_words.append(index_to_word[second_index[:, 1].item()])
+        top_3_words.append(index_to_word[third_index[:, 1].item()])
+        return top_3_words
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train or use an RNN for word prediction.")
@@ -183,30 +152,30 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', type=int, default=100, help="Number of epochs for training.")
     parser.add_argument('--embedding_dim', type=int, default=100, help="Dimension of word embeddings.")
     parser.add_argument('--hidden_dim', type=int, default=150, help="Dimension of RNN hidden states.")
-    parser.add_argument('--num_words', '-n', type=int, default=10, help="Number of words to predict.")
 
     args = parser.parse_args()
 
     if args.train and args.data_path:
         # Load and preprocess the text data
-        word_to_index, index_to_word, text_data = process_files(args.data_path)
-        
+        words, char_to_index, index_to_char, word_to_index, index_to_word = process_files(args.data_path)
+        input_sequences, output_words = create_input_output_pairs(words, char_to_index, word_to_index)
         # Train the model
-        model = train_model(text_data, args.embedding_dim, args.hidden_dim, args.epochs)
-
+        model = train_model(input_sequences, output_words, char_to_index, word_to_index, args.embedding_dim, args.hidden_dim, args.epochs)
         save_model(model, args.model_path)
-
         print(f"Model trained and saved at {args.model_path}")
 
     elif args.model_path and args.data_path:
         # Load the model and re-run word mappings
-        word_to_index, index_to_word, text_data = process_files(args.data_path)
+        #word_to_index, index_to_word, text_data = process_files(args.data_path)
+        words, char_to_index, index_to_char, word_to_index, index_to_word = process_files(args.data_path)
+        print(char_to_index, word_to_index)
         vocab_size = len(word_to_index)
         model = load_model(args.model_path, vocab_size, args.embedding_dim, args.hidden_dim)
-        print("Loaded model. Enter seed text to predict next words.")
+        print("Loaded model. Enter characters to predict next words.")
+
         while True:
             seed_text = input("Enter seed text: ").strip().lower()
-            predicted_sentence = predict_next_words(seed_text, model, word_to_index, index_to_word, args.num_words)
-            print("Predicted sentence:", predicted_sentence)
+            words = suggest_words_RNN(seed_text, model, char_to_index, index_to_word)
+            print("Suggested words:", words)
     else:
-        print("Please specify either -t (training option) with -d (data) or -m (pretrained model) with -d (data) for predictions.")
+        print("Please specify either -t (training option) with -d (data) and -m (model path) OR -m (pretrained model) with -d (data) for predictions.")
