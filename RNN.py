@@ -129,6 +129,8 @@ if __name__ == "__main__":
         words, char_to_index, index_to_char, word_to_index, index_to_word = process_files(args.data_path)
         input_sequences, output_words = create_input_output_pairs(words, char_to_index, word_to_index)
         # Train the model
+        #print("before training: " , input_sequences[:10])
+        #print("output words", output_words[:10])
         model = train_model(input_sequences, output_words, char_to_index, word_to_index, args.embedding_dim, args.hidden_dim, args.epochs)
         save_model(model, args.model_path)
         print(f"Model trained and saved at {args.model_path}")
