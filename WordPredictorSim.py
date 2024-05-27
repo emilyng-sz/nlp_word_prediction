@@ -105,18 +105,26 @@ class WordPredictor:
 
     def display_console(self, words, new_word):
         """
-        Displays the console.
+        Outputs the current sentence to the console, displaying the typed words and the new word being formed.
         """
         print("\n")
-        all_words = ""
+
+        # Construct the full sentence with the new word being typed.
+        full_sentence = ""
         for word in words:
             if word in [".", ",", "!", "?"]:
-                all_words = all_words.strip()  # Remove trailing whitespace.
-                all_words += word + " "
-                continue
-            all_words += word + " "
-        all_words += new_word + "_"
-        print(all_words)
+                # Attach punctuation directly to the previous word without a space.
+                full_sentence = full_sentence.rstrip() + word + " "
+            else:
+                # Add words with a trailing space.
+                full_sentence += word + " "
+        
+        # Add the new word being typed with an underscore.
+        full_sentence += new_word + "_"
+        
+        # Display the constructed sentence.
+        print(full_sentence)
+
 
     def fetch_n_grams(self, prev_word=None, two_words_back=None, user_input=""):
         """
@@ -131,30 +139,21 @@ class WordPredictor:
             if w != "empty":
                 w = w.get(prev_word, "empty")
                 if w != "empty":
-                    words_and_probs = [(w, p) for w, p in w.items()]
-                    words_and_probs.sort(key=itemgetter(1), reverse=True)  # Sort by descending probability.
-                    possible_words = [w for (w, p) in words_and_probs if w.startswith(user_input)]  # Filter words by user_input.
-                    return possible_words
-        elif prev_word and not two_words_back:
+                    words_and_probs = sorted(w.items(), key=itemgetter(1), reverse=True) # Sort by descending probability
+                    return [w for w, p in words_and_probs if w.startswith(user_input)] # Filter words by user_input
+        elif prev_word:
             w = self.bigram_prob.get(prev_word, "empty")
             if w != "empty":
-                words_and_probs = [(w, p) for w, p in w.items()]
-                words_and_probs.sort(key=itemgetter(1), reverse=True)  # Sort by descending probability.
-                possible_words = [w for (w, p) in words_and_probs if w.startswith(user_input)]  # Filter words by user_input.
-                return possible_words
+                words_and_probs = sorted(w.items(), key=itemgetter(1), reverse=True) # Sort by descending probability
+                return [w for w, p in words_and_probs if w.startswith(user_input)] # Filter words by user_input
         else:
-            words_and_probs = [(w, p) for w, p in self.unigram_count.items()]
-            words_and_probs.sort(key=itemgetter(1), reverse=True)  # Sort by descending probability.
-            possible_words = [w for (w, p) in words_and_probs if w.startswith(user_input)]  # Filter words by user_input.
-            return possible_words
-
+            words_and_probs = sorted(self.unigram_count.items(), key=itemgetter(1), reverse=True) # Sort by descending probability
+            return [w for w, p in words_and_probs if w.startswith(user_input)] # Filter words by user_input
         return []
 
     def suggest_words(self, prev_word=None, two_words_back=None, user_input="", possible_words=None):
         """
-        Suggests possible words using self.fetch_n_grams().
-
-        If possible_words is provided, it filters the list to remove words that don't match user_input.
+        Suggests possible words using self.fetch_n_grams(). If possible_words is provided, it filters the list to remove words that don't match user_input.
         """
         if possible_words:
             return [w for w in possible_words if w.startswith(user_input)]
@@ -164,7 +163,7 @@ class WordPredictor:
         """
         Prompts the user to input letters or choose from recommended words.
 
-        :param possible_choices: List of ["1-", "2-", ...] recommended words the user can choose from.
+        :param possible_choices: List of ["1", "2", ...] recommended words the user can choose from.
         """
         while True:
             letter = input("Enter a character or choose a recommended word: ")
@@ -172,10 +171,8 @@ class WordPredictor:
                 return letter
             print("\nPlease enter a single character. You can also type 'quit' to exit, 'reset' to start over, or a space to finish typing your word.")
 
+
     def process_typing(self):
-        """
-        Manages user inputs during typing.
-        """
         letter = ""
         new_word = ""
 
@@ -185,7 +182,6 @@ class WordPredictor:
             self.display_console(self.words, new_word)
             
             if len(self.words) == 0 and new_word == "":
-                # Wait for the user to input the first letter without suggestions.
                 letter = self.get_letter_input([])
                 if letter == "quit":
                     return True
@@ -196,20 +192,20 @@ class WordPredictor:
                 continue
 
             if len(self.words) == 0:
-                # After the first letter, get start-of-sentence probabilities (bigrams).
+                # After the first letter, get start-of-sentence probs (bigrams)
                 possible_words = self.suggest_words(prev_word=".", user_input=new_word)
             elif len(self.words) == 1:
-                possible_words = self.suggest_words(prev_word=str(self.words[-1]), user_input=new_word)  # Get bigram probabilities.
+                possible_words = self.suggest_words(prev_word=str(self.words[-1]), user_input=new_word) # Get bigram probs
             else:
                 possible_words = self.suggest_words(prev_word=str(self.words[-1]),
                                                     two_words_back=str(self.words[-2]),
-                                                    user_input=new_word)  # Get trigram probabilities.
+                                                    user_input=new_word) # Get trigram probs
                 possible_words += self.suggest_words(prev_word=str(self.words[-1]), user_input=new_word)
 
             words_to_recommend = []
             i = 0
             while len(words_to_recommend) < self.num_words_to_recommend and len(possible_words) != 0:
-                # Ensure unique words are recommended.
+                # Ensure unique words are recommended
                 try:
                     word = possible_words[i]
                     if word in words_to_recommend:
@@ -219,18 +215,17 @@ class WordPredictor:
                         words_to_recommend.append(word)
                 except IndexError:
                     break
+    
+            # Check unigrams if not enough bigrams/trigrams found.
+            if len(words_to_recommend) < self.num_words_to_recommend and check_unigram:
+                possible_words += self.suggest_words(user_input=new_word)
+                check_unigram = False
+                continue
 
-            if len(words_to_recommend) < self.num_words_to_recommend:
-                if check_unigram:
-                    # If no bigrams found, check unigrams.
-                    possible_words += self.suggest_words(user_input=new_word)
-                    check_unigram = False
-                    continue
+            for i, word in enumerate(words_to_recommend):
+                print(f"{i + 1}: {word}")
 
-            for i in range(len(words_to_recommend)):
-                print(i + 1, "-", words_to_recommend[i])
-
-            possible_choices = [(str(i) + "-") for i in range(1, len(words_to_recommend) + 1)]
+            possible_choices = [str(i + 1) for i in range(len(words_to_recommend))]
             letter = self.get_letter_input(possible_choices)
 
             if letter == "quit":
@@ -239,8 +234,8 @@ class WordPredictor:
                 return False
 
             if letter in possible_choices:
-                index = int(letter[0])
-                word = words_to_recommend[index - 1]
+                index = int(letter) - 1
+                word = words_to_recommend[index]
                 self.words.append(word)
                 self.display_console(self.words, "")
                 return False
@@ -261,35 +256,35 @@ class WordPredictor:
         self.words.append(new_word)
         return False
 
+
+
     def display_stats(self, filename):
         """
-        Reads the language model file and prints the following statistics:
-        (i) Number of bigrams and trigrams;
-        (ii) Number of unique words and total words in the training corpus;
-        (iii) Ten most probable words in descending order of their unigram probabilities.
+        Reads the language model file and prints various statistics:
+        (i) Keystrokes without prediction
+        (ii) Keystrokes with prediction
+        (iii) Keystrokes saved
         (iv) Percentage of keystrokes saved when using the model on the input file.
 
         :param filename: The name of the language model file or text file.
         :return: True if the file is successfully processed, False otherwise.
         """
         try:
-            # Try reading with 'utf-8' encoding first
             with codecs.open(filename, 'r', 'utf-8') as f:
                 input_text = f.read()
         except UnicodeDecodeError:
             try:
-                # Fallback to 'latin-1' encoding
                 with codecs.open(filename, 'r', 'latin-1') as f:
                     input_text = f.read()
             except UnicodeDecodeError:
                 print("Error: Cannot decode the input file {}".format(filename))
                 return False
 
-        # Calculate keystrokes saved
         total_keystrokes = len(input_text.replace(" ", ""))
         keystrokes_saved = 0
         words = nltk.word_tokenize(input_text)
         typed_words = []
+
         for word in words:
             typed_word = ""
             for char in word:
@@ -302,11 +297,12 @@ class WordPredictor:
         keystrokes_saved_percentage = (keystrokes_saved / total_keystrokes) * 100
         keystrokes_with_pred = total_keystrokes - keystrokes_saved
         print("\nTotal keystrokes without prediction: {}".format(total_keystrokes))
-        print("\nTotal keystrokes with prediction: {}".format(keystrokes_with_pred))
+        print("Total keystrokes with prediction: {}".format(keystrokes_with_pred))
         print("Keystrokes saved: {}".format(keystrokes_saved))
         print("Percentage of keystrokes saved: {:.2f}%".format(keystrokes_saved_percentage))
 
         return True
+
 
 def main():
     parser = argparse.ArgumentParser(description="Predict words based on entered text.")

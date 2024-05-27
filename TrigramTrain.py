@@ -76,58 +76,63 @@ class TrigramTrainer:
 
         :param token: The current word to be processed.
         """
-        n = len(self.index)
+        current_index = len(self.index)
         self.total_words += 1
 
         if token not in self.index:
-            self.index[token] = n
-            self.word[n] = token
+            self.index[token] = current_index
+            self.word[current_index] = token
 
         self.unigram_count[token] += 1
 
         if self.last_index != -1:
-            prev_word = self.word[self.last_index]
-            self.bigram_count[prev_word][token] += 1
+            last_word = self.word[self.last_index]
+            self.bigram_count[last_word][token] += 1
 
         if self.sub_two_index != -1:
             sub_two_word = self.word[self.sub_two_index]
-            prev_word = self.word[self.last_index]
-            self.trigram_count[sub_two_word][prev_word][token] += 1
+            last_word = self.word[self.last_index]
+            self.trigram_count[sub_two_word][last_word][token] += 1
 
-        self.sub_two_index = self.last_index
-        self.last_index = self.index[token]
+        self.sub_two_index, self.last_index = self.last_index, self.index[token]
         self.unique_words = len(self.index)
 
     def stats(self):
         """
         Creates a list of rows to print of the language model.
         """
-        rows_to_print = []
-        bigram_rows = []
-        trigram_rows = []
+        output_rows = []
+        bigram_entries = []
+        trigram_entries = []
 
-        first_row = f"{self.unique_words} {self.total_words}"
-        rows_to_print.append(first_row)
+        header = f"{self.unique_words} {self.total_words}"
+        output_rows.append(header)
 
-        for i in range(len(self.word)):
-            word = self.word[i]
-            frequency_of_word = self.unigram_count[word]
-            rows_to_print.append(f"{i} {word} {frequency_of_word}")
+        vocabulary_size = len(self.index)
 
-            for second_word, bigram_occurrences in self.bigram_count[word].items():
-                p = f"{math.log(bigram_occurrences / frequency_of_word):.15f}"
-                bigram_rows.append(f"{self.index[word]} {self.index[second_word]} {p}")
+        for word_id in range(len(self.word)):
+            current_word = self.word[word_id]
+            unigram_freq = self.unigram_count[current_word]
+            output_rows.append(f"{word_id} {current_word} {unigram_freq}")
 
-                for third_word, trigram_occurrences in self.trigram_count[word][second_word].items():
-                    p = f"{math.log(trigram_occurrences / bigram_occurrences):.15f}"
-                    trigram_rows.append(f"{self.index[word]} {self.index[second_word]} {self.index[third_word]} {p}")
+            for next_word, bigram_count in self.bigram_count[current_word].items():
+                # Laplace smoothing for bigrams
+                bigram_prob = math.log((bigram_count + 1) / (unigram_freq + vocabulary_size))
+                bigram_entries.append(f"{self.index[current_word]} {self.index[next_word]} {bigram_prob:.15f}")
 
-        rows_to_print.extend(bigram_rows)
-        rows_to_print.append("-2")  # Signifies end of bigrams
-        rows_to_print.extend(trigram_rows)
-        rows_to_print.append("-1")  # Signifies end of file
+                for following_word, trigram_count in self.trigram_count[current_word][next_word].items():
+                    bigram_freq = self.bigram_count[current_word][next_word]
+                    # Laplace smoothing for trigrams
+                    trigram_prob = math.log((trigram_count + 1) / (bigram_freq + vocabulary_size))
+                    trigram_entries.append(f"{self.index[current_word]} {self.index[next_word]} {self.index[following_word]} {trigram_prob:.15f}")
 
-        return rows_to_print
+        output_rows.extend(bigram_entries)
+        output_rows.append("-2")  # End of bigrams marker
+        output_rows.extend(trigram_entries)
+        output_rows.append("-1")  # End of file marker
+
+        return output_rows
+
 
 
 def main():

@@ -23,7 +23,7 @@ In your terminal in the main directory of this repository,
 # How to interact with GUI
 After running `python WordPredictorSim.py' -f [model name]`, you can choose to either enter the typing console mode by inputting 'type', or you can quit by inputting 'quit'.
 
-To select the first word from the list of suggested words, type "1-" and press enter. To choose the second word, type "2-", and so on.
+To select the first word from the list of suggested words, type "1" and press enter. To choose the second word, type "2", and so on.
 
 Type "reset" to clear the letters you’ve entered for the current word if you want to start over.
 
